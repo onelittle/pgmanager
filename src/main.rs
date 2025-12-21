@@ -131,6 +131,9 @@ struct Cli {
     /// Path to the Unix domain socket
     #[clap(short, long, default_value = "tmp/test_manager.sock")]
     socket: String,
+    /// Enable verbose logging
+    #[clap(short, long, default_value_t = false)]
+    verbose: bool,
     // Subcommand to wrap another command
     #[clap(subcommand)]
     command: Commands,
@@ -149,11 +152,15 @@ enum Commands {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .init();
-
     let args = Cli::parse();
+
+    tracing_subscriber::fmt()
+        .with_max_level(if args.verbose {
+            tracing::Level::DEBUG
+        } else {
+            tracing::Level::INFO
+        })
+        .init();
 
     let path = if args.socket.starts_with("/") {
         PathBuf::from(args.socket)
