@@ -1,6 +1,7 @@
 use std::{
     collections::VecDeque,
     path::PathBuf,
+    str::FromStr,
     sync::{Arc, atomic::AtomicUsize},
 };
 
@@ -11,7 +12,7 @@ use tokio::{
     select,
     sync::Mutex,
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 static USAGE: AtomicUsize = AtomicUsize::new(0);
 static PEAK_USAGE: AtomicUsize = AtomicUsize::new(0);
@@ -30,16 +31,25 @@ fn decrement_usage() -> usize {
     USAGE.fetch_sub(1, std::sync::atomic::Ordering::Relaxed)
 }
 
+fn env_var<T: FromStr>(key: &str) -> Option<T> {
+    std::env::var(format!("PGM_{}", key))
+        .or_else(|_| std::env::var(key))
+        .map_err(|e| {
+            warn!("Environment variable {} not found: {}", key, e);
+            warn!("{}", e);
+        })
+        .ok()
+        .and_then(|v| v.parse().ok())
+}
+
 fn serve(
     path: PathBuf,
     cancellation_token: tokio_util::sync::CancellationToken,
     barrier: Option<Arc<tokio::sync::Barrier>>,
 ) -> tokio::task::JoinHandle<()> {
     let mut databases: VecDeque<String> = VecDeque::new();
-    let max_count = std::env::var("DATABASE_COUNT")
-        .map(|n| n.parse::<usize>().unwrap())
-        .unwrap_or(8);
-    let db_prefix = std::env::var("DATABASE_PREFIX").expect("DATABASE_PREFIX must be set");
+    let max_count: usize = env_var("DATABASE_COUNT").unwrap_or(8);
+    let db_prefix: String = env_var("DATABASE_PREFIX").expect("DATABASE_PREFIX must be set");
     for n in 0..max_count {
         databases.push_back(format!("{}{}", db_prefix, n));
     }
