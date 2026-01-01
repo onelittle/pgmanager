@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, command};
 
-use pgmanager::{serve, wrap};
+use pgmanager::{serve, wrap, wrap_each};
 
 #[derive(Parser)]
 struct Cli {
@@ -27,6 +27,17 @@ enum Commands {
     Wrap {
         #[arg(last = true)]
         command: Vec<String>,
+    },
+    /// Wrap a command n times passing PGM_SHARD and PGM_DATABASE_SHARD
+    #[command()]
+    WrapEach {
+        #[arg(last = true)]
+        command: Vec<String>,
+        #[arg(short, long, default_value_t = false)]
+        ignore_exit_code: bool,
+        /// Pass the database name as an argument
+        #[arg(short, long, default_value_t = false)]
+        xarg: bool,
     },
 }
 
@@ -58,6 +69,13 @@ async fn main() {
         }
         Commands::Wrap { command } => {
             wrap(&path, command).await;
+        }
+        Commands::WrapEach {
+            command,
+            ignore_exit_code,
+            xarg,
+        } => {
+            wrap_each(&path, command, ignore_exit_code, xarg).await;
         }
     }
 }

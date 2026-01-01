@@ -87,17 +87,20 @@ async fn server(
     std::fs::remove_file(&path).unwrap();
 }
 
-async fn start_server(path: &Path) -> (tokio::task::JoinHandle<()>, CancellationToken) {
-    let cancellation_token = tokio_util::sync::CancellationToken::new();
-    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+fn build_databases() -> Databases {
     let max_count: usize = util::env_var("DATABASE_COUNT").unwrap_or(8);
     let db_prefix: String = util::env_var("DATABASE_PREFIX").expect("DATABASE_PREFIX must be set");
     let mut databases: VecDeque<String> = VecDeque::new();
     for n in 0..max_count {
         databases.push_back(format!("{}{}", db_prefix, n));
     }
+    Arc::new(Mutex::new(databases))
+}
 
-    let databases = Arc::new(Mutex::new(databases));
+async fn start_server(path: &Path) -> (tokio::task::JoinHandle<()>, CancellationToken) {
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+    let databases = build_databases();
 
     if path.is_dir() {
         panic!("Socket path cannot be a directory");
@@ -144,6 +147,31 @@ pub async fn wrap(path: &Path, command: Vec<String>) {
     cancellation_token.cancel();
     server.await.unwrap();
     std::process::exit(status.code().unwrap_or(1));
+}
+
+pub async fn wrap_each(path: &Path, command: Vec<String>, ignore_exit_code: bool, xarg: bool) {
+    let (server, cancellation_token) = start_server(path).await;
+    let (program, args) = command.split_first().expect("No command provided");
+    let databases = build_databases();
+    let mut exit_code = 0;
+
+    for (n, db_name) in databases.lock().await.iter().enumerate() {
+        let mut cmd = tokio::process::Command::new(program);
+        cmd.args(args);
+        if xarg {
+            cmd.arg(db_name);
+        }
+        cmd.env("PGDATABASE", db_name);
+        cmd.env("PGM_DATABASE_SHARD", n.to_string());
+        let status = cmd.status().await.unwrap();
+        if !ignore_exit_code && !status.success() {
+            exit_code = status.code().unwrap_or(1);
+            break;
+        }
+    }
+    cancellation_token.cancel();
+    server.await.unwrap();
+    std::process::exit(exit_code);
 }
 
 pub struct DatabaseGuard {
