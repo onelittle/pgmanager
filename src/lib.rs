@@ -5,16 +5,25 @@ mod util;
 
 use tokio::{io::AsyncReadExt, net::UnixStream};
 
+pub const DEFAULT_SOCKET_PATH: &str = "tmp/test_manager.sock";
+
 pub struct DatabaseGuard {
     pub name: String,
     _stream: UnixStream,
 }
 
 pub async fn get_database() -> Result<DatabaseGuard, Box<dyn std::error::Error>> {
-    let path = std::env::var("PGMANAGER_SOCKET").expect("PGMANAGER_SOCKET must be set");
-    let mut stream = tokio::net::UnixStream::connect(path)
+    let path = util::env_var_with_fallback("PGM_SOCKET", "PGMANAGER_SOCKET")
+        .unwrap_or_else(|| DEFAULT_SOCKET_PATH.to_string());
+    let stream = tokio::net::UnixStream::connect(path)
         .await
         .expect("Failed to connect to test manager socket");
+    get_database_from_stream(stream).await
+}
+
+async fn get_database_from_stream(
+    mut stream: UnixStream,
+) -> Result<DatabaseGuard, Box<dyn std::error::Error>> {
     let mut buffer = [0; 1024];
     let read = stream
         .read(&mut buffer)

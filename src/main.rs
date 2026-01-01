@@ -7,7 +7,7 @@ use pgmanager::commands;
 #[derive(Parser)]
 struct Cli {
     /// Path to the Unix domain socket
-    #[clap(short, long, default_value = "tmp/test_manager.sock")]
+    #[clap(short, long, default_value = pgmanager::DEFAULT_SOCKET_PATH)]
     socket: String,
     /// Enable verbose logging
     #[clap(short, long, default_value_t = false)]

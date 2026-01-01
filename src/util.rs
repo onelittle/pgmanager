@@ -4,21 +4,25 @@ use tracing::{error, warn};
 
 fn get_prefixed_env_var(key: &str) -> Option<String> {
     let prefixed_key = format!("PGM_{}", key);
-    let prefixed = std::env::var(&prefixed_key);
-    let fallback = std::env::var(key);
+    env_var_with_fallback(&prefixed_key, key)
+}
+
+pub(crate) fn env_var_with_fallback(key: &str, fallback_key: &str) -> Option<String> {
+    let prefixed = std::env::var(key);
+    let fallback = std::env::var(fallback_key);
     match (prefixed, fallback) {
         (Ok(val), _) => Some(val),
         (Err(VarError::NotPresent), Ok(val)) => {
-            warn!("Environment variable {prefixed_key} not found. Using fallback {key}");
+            warn!("Environment variable {key} not found. Using fallback {key}");
             warn!("This behavior is deprecated and will panic in a future version.");
             Some(val)
         }
         (Err(VarError::NotPresent), _) => {
-            error!("Environment variable {prefixed_key} not found");
+            error!("Environment variable {key} not found");
             None
         }
         (Err(VarError::NotUnicode(_)), _) => {
-            error!("Environment variable {prefixed_key} contains non-unicode data");
+            error!("Environment variable {key} contains non-unicode data");
             None
         }
     }
