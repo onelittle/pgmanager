@@ -145,3 +145,44 @@ pub async fn wrap(path: &Path, command: Vec<String>) {
     server.await.unwrap();
     std::process::exit(status.code().unwrap_or(1));
 }
+
+pub struct DatabaseGuard {
+    pub name: String,
+    _stream: UnixStream,
+}
+
+pub async fn get_database() -> Result<DatabaseGuard, Box<dyn std::error::Error>> {
+    let path = std::env::var("PGMANAGER_SOCKET").expect("PGMANAGER_SOCKET must be set");
+    let mut stream = tokio::net::UnixStream::connect(path)
+        .await
+        .expect("Failed to connect to test manager socket");
+    let mut buffer = [0; 1024];
+    let read = stream
+        .read(&mut buffer)
+        .await
+        .expect("Failed to read from test manager socket");
+    if read == 0 {
+        panic!("Test manager socket closed unexpectedly");
+    }
+    let response = String::from_utf8_lossy(&buffer);
+    if response.starts_with("OK:") {
+        let db_name = response.strip_prefix("OK:").unwrap().trim().to_string();
+        // Remove embedded null characters
+        let db_name = db_name.replace('\0', "");
+
+        eprintln!("Using test database: {}", db_name);
+        return Ok(DatabaseGuard {
+            name: db_name,
+            _stream: stream,
+        });
+    }
+
+    if response.starts_with("EMPTY:") {
+        panic!(
+            "No databases available: {}",
+            response.strip_prefix("ERROR:").unwrap().trim()
+        );
+    }
+
+    panic!("Unexpected response from test manager: {}", response);
+}
