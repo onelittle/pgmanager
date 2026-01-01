@@ -31,26 +31,24 @@ async fn get_database_from_stream(mut stream: UnixStream) -> DatabaseGuard {
         panic!("Test manager socket closed unexpectedly");
     }
     let response = String::from_utf8_lossy(&buffer);
-    if response.starts_with("OK:") {
-        let db_name = response.strip_prefix("OK:").unwrap().trim().to_string();
-        // Remove embedded null characters
-        let db_name = db_name.replace('\0', "");
+    let (prefix, message) = response.split_once(':').unwrap_or(("", ""));
+    match (prefix, message) {
+        ("OK", db_name) => {
+            let db_name = db_name.replace('\0', "");
 
-        eprintln!("Using test database: {}", db_name);
-        return DatabaseGuard {
-            name: db_name,
-            _stream: stream,
-        };
+            eprintln!("Using test database: {}", db_name);
+            DatabaseGuard {
+                name: db_name,
+                _stream: stream,
+            }
+        }
+        ("EMPTY", message) => {
+            panic!("No databases available: {message}");
+        }
+        (_, _) => {
+            panic!("Unexpected response from test manager: {response}")
+        }
     }
-
-    if response.starts_with("EMPTY:") {
-        panic!(
-            "No databases available: {}",
-            response.strip_prefix("ERROR:").unwrap().trim()
-        );
-    }
-
-    panic!("Unexpected response from test manager: {}", response);
 }
 
 #[cfg(test)]
