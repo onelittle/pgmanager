@@ -12,7 +12,7 @@ pub struct DatabaseGuard {
     _stream: UnixStream,
 }
 
-pub async fn get_database() -> Result<DatabaseGuard, Box<dyn std::error::Error>> {
+pub async fn get_database() -> DatabaseGuard {
     let path = util::env_var_with_fallback("PGM_SOCKET", "PGMANAGER_SOCKET")
         .unwrap_or_else(|| DEFAULT_SOCKET_PATH.to_string());
     let stream = tokio::net::UnixStream::connect(path)
@@ -21,9 +21,7 @@ pub async fn get_database() -> Result<DatabaseGuard, Box<dyn std::error::Error>>
     get_database_from_stream(stream).await
 }
 
-async fn get_database_from_stream(
-    mut stream: UnixStream,
-) -> Result<DatabaseGuard, Box<dyn std::error::Error>> {
+async fn get_database_from_stream(mut stream: UnixStream) -> DatabaseGuard {
     let mut buffer = [0; 1024];
     let read = stream
         .read(&mut buffer)
@@ -39,10 +37,10 @@ async fn get_database_from_stream(
         let db_name = db_name.replace('\0', "");
 
         eprintln!("Using test database: {}", db_name);
-        return Ok(DatabaseGuard {
+        return DatabaseGuard {
             name: db_name,
             _stream: stream,
-        });
+        };
     }
 
     if response.starts_with("EMPTY:") {
