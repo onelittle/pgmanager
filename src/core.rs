@@ -1,8 +1,4 @@
-use std::{
-    collections::VecDeque,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{collections::VecDeque, path::Path, sync::Arc};
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt as _},
@@ -57,13 +53,11 @@ async fn respond(databases: Databases, mut stream: UnixStream, address: SocketAd
 }
 
 async fn server(
-    path: PathBuf,
+    listener: UnixListener,
     databases: Databases,
     cancellation_token: CancellationToken,
     barrier: Arc<tokio::sync::Barrier>,
 ) {
-    let listener = UnixListener::bind(path.clone()).unwrap();
-    debug!("Listening on {}", path.display());
     barrier.wait().await;
     loop {
         select! {
@@ -81,9 +75,6 @@ async fn server(
             }
         }
     }
-
-    info!("Shutting down server...");
-    std::fs::remove_file(&path).unwrap();
 }
 
 pub(crate) fn build_databases() -> Databases {
@@ -112,8 +103,15 @@ pub(crate) async fn start_server(path: &Path) -> (tokio::task::JoinHandle<()>, C
         let path = path.to_path_buf();
         let cancellation_token = cancellation_token.clone();
         let barrier = barrier.clone();
-        tokio::spawn(server(path, databases, cancellation_token, barrier))
+        let listener = UnixListener::bind(path.clone()).unwrap();
+        tokio::spawn(async move {
+            let result = server(listener, databases, cancellation_token, barrier).await;
+            info!("Shutting down server...");
+            std::fs::remove_file(&path).expect("Failed to remove socket file");
+            result
+        })
     };
     barrier.wait().await;
+    debug!("Listening on {}", path.display());
     (server, cancellation_token)
 }
