@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, command};
 
-use pgmanager::{serve, wrap, wrap_each};
+use pgmanager::commands;
 
 #[derive(Parser)]
 struct Cli {
@@ -65,14 +65,14 @@ async fn main() -> std::process::ExitCode {
 
     match args.command {
         Commands::Serve => {
-            serve(&path).await;
+            commands::serve(&path).await;
             std::process::ExitCode::SUCCESS
         }
-        Commands::Wrap { command } => wrap(&path, command).await,
+        Commands::Wrap { command } => commands::wrap(&path, command).await,
         Commands::WrapEach {
             command,
             ignore_exit_code,
             xarg,
-        } => wrap_each(&path, command, ignore_exit_code, xarg).await,
+        } => commands::wrap_each(&path, command, ignore_exit_code, xarg).await,
     }
 }
