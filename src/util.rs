@@ -1,6 +1,6 @@
 use std::{env::VarError, str::FromStr};
 
-use tracing::warn;
+use tracing::{error, warn};
 
 fn get_prefixed_env_var(key: &str) -> Option<String> {
     let prefixed_key = format!("PGM_{}", key);
@@ -14,11 +14,11 @@ fn get_prefixed_env_var(key: &str) -> Option<String> {
             Some(val)
         }
         (Err(VarError::NotPresent), _) => {
-            warn!("Environment variable {prefixed_key} not found");
+            error!("Environment variable {prefixed_key} not found");
             None
         }
         (Err(VarError::NotUnicode(_)), _) => {
-            warn!("Environment variable {prefixed_key} contains non-unicode data");
+            error!("Environment variable {prefixed_key} contains non-unicode data");
             None
         }
     }
