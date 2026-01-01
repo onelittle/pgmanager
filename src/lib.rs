@@ -5,7 +5,7 @@ mod util;
 
 use tokio::{io::AsyncReadExt, net::UnixStream};
 
-pub const DEFAULT_SOCKET_PATH: &str = "tmp/test_manager.sock";
+pub const DEFAULT_SOCKET_PATH: &str = "tmp/pgmanager.sock";
 
 pub struct DatabaseGuard {
     pub name: String,
