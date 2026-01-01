@@ -26,9 +26,9 @@ pub async fn wrap(path: &Path, command: Vec<String>) -> ExitCode {
     let (server, cancellation_token) = core::start_server(path, config).await;
 
     // Run the command as passed and send PGMANAGER_SOCKET env var
-    let command: String = command.join(" ");
-    let mut cmd = tokio::process::Command::new("sh");
-    cmd.arg("-c").arg(&command);
+    let (program, args) = command.split_first().expect("No command provided");
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args);
     cmd.env("PGMANAGER_SOCKET", path.to_str().unwrap());
     let status = cmd.status().await.unwrap();
     cancellation_token.cancel();
