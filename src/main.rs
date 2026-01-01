@@ -19,8 +19,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    /// Serve the pgmanager socket
     #[command()]
     Serve,
+    /// Wrap a command and pass PGMANAGER_SOCKET
     #[command()]
     Wrap {
         #[arg(last = true)]
