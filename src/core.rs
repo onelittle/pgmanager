@@ -137,3 +137,27 @@ pub(crate) async fn start_server(
     debug!("Listening on {}", path.display());
     (server, cancellation_token)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers;
+
+    #[tokio::test]
+    async fn test_build_databases() {
+        let config = Config::new(2, "test_db_".to_string());
+        let actual = build_databases(config);
+        let actual = actual.lock().await.clone();
+        let expected: VecDeque<_> = vec!["test_db_0".to_string(), "test_db_1".to_string()].into();
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn smoke_test_start_server() {
+        let path = test_helpers::temp_path();
+        let config = Config::new(2, "test_db_".to_string());
+        let (server, cancellation_token) = start_server(&path, config).await;
+        cancellation_token.cancel();
+        assert!(server.await.is_ok());
+    }
+}
