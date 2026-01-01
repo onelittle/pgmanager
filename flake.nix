@@ -22,7 +22,7 @@
           ];
         };
 
-        packages.pgmanager = pkgs.rustPlatform.buildRustPackage {
+        packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "pgmanager";
           version = "0.2.0";
 
