@@ -52,3 +52,51 @@ async fn get_database_from_stream(mut stream: UnixStream) -> DatabaseGuard {
 
     panic!("Unexpected response from test manager: {}", response);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_database() {
+        let path = test_helpers::temp_path();
+        let (server, cancellation_token) = test_helpers::temp_server(&path).await;
+
+        let stream = test_helpers::temp_client(&path).await;
+        let db_guard_a = get_database_from_stream(stream).await;
+        let stream = test_helpers::temp_client(&path).await;
+        let db_guard_b = get_database_from_stream(stream).await;
+
+        assert!(db_guard_a.name.starts_with("test_db_"));
+        assert!(db_guard_b.name.starts_with("test_db_"));
+        assert_ne!(db_guard_a.name, db_guard_b.name);
+        cancellation_token.cancel();
+        server.await.expect("Server task failed");
+    }
+
+    mod test_helpers {
+        use tokio::{net::UnixStream, task::JoinHandle};
+        use tokio_util::sync::CancellationToken;
+
+        use crate::core;
+
+        pub fn temp_path() -> std::path::PathBuf {
+            tempfile::NamedTempFile::new()
+                .expect("Failed to create temp file")
+                .path()
+                .to_path_buf()
+        }
+
+        pub async fn temp_server(path: &std::path::Path) -> (JoinHandle<()>, CancellationToken) {
+            let config = core::Config::new(2, "test_db_".to_string());
+            let (server, cancellation_token) = core::start_server(path, config).await;
+            (server, cancellation_token)
+        }
+
+        pub async fn temp_client(path: &std::path::Path) -> UnixStream {
+            tokio::net::UnixStream::connect(path)
+                .await
+                .expect("Failed to connect")
+        }
+    }
+}
