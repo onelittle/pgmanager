@@ -11,6 +11,27 @@ use tracing::{debug, info};
 
 use crate::{stats, util};
 
+#[derive(Clone)]
+pub(crate) struct Config {
+    max_databases: usize,
+    prefix: String,
+}
+
+impl Config {
+    pub(crate) fn new(max_databases: usize, prefix: String) -> Self {
+        Self {
+            max_databases,
+            prefix,
+        }
+    }
+
+    pub(crate) fn from_env() -> Self {
+        let max_databases: usize = util::env_var("DATABASE_COUNT").unwrap_or(8);
+        let prefix: String = util::env_var("DATABASE_PREFIX").expect("DATABASE_PREFIX must be set");
+        Self::new(max_databases, prefix)
+    }
+}
+
 type Databases = Arc<Mutex<VecDeque<String>>>;
 
 async fn respond(databases: Databases, mut stream: UnixStream, address: SocketAddr) {
@@ -77,20 +98,21 @@ async fn server(
     }
 }
 
-pub(crate) fn build_databases() -> Databases {
-    let max_count: usize = util::env_var("DATABASE_COUNT").unwrap_or(8);
-    let db_prefix: String = util::env_var("DATABASE_PREFIX").expect("DATABASE_PREFIX must be set");
+pub(crate) fn build_databases(config: Config) -> Databases {
     let mut databases: VecDeque<String> = VecDeque::new();
-    for n in 0..max_count {
-        databases.push_back(format!("{}{}", db_prefix, n));
+    for n in 0..config.max_databases {
+        databases.push_back(format!("{}{}", config.prefix, n));
     }
     Arc::new(Mutex::new(databases))
 }
 
-pub(crate) async fn start_server(path: &Path) -> (tokio::task::JoinHandle<()>, CancellationToken) {
+pub(crate) async fn start_server(
+    path: &Path,
+    config: Config,
+) -> (tokio::task::JoinHandle<()>, CancellationToken) {
     let cancellation_token = tokio_util::sync::CancellationToken::new();
     let barrier = Arc::new(tokio::sync::Barrier::new(2));
-    let databases = build_databases();
+    let databases = build_databases(config);
 
     if path.is_dir() {
         panic!("Socket path cannot be a directory");
