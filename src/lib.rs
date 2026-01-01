@@ -4,6 +4,7 @@ mod util;
 use std::{
     collections::VecDeque,
     path::{Path, PathBuf},
+    process::ExitCode,
     sync::Arc,
 };
 
@@ -135,25 +136,31 @@ pub async fn serve(path: &Path) {
     }
 }
 
-pub async fn wrap(path: &Path, command: Vec<String>) {
+pub async fn wrap(path: &Path, command: Vec<String>) -> ExitCode {
     let (server, cancellation_token) = start_server(path).await;
 
     // Run the command as passed and send PGMANAGER_SOCKET env var
-    let command = command.join(" ");
+    let command: String = command.join(" ");
     let mut cmd = tokio::process::Command::new("sh");
     cmd.arg("-c").arg(&command);
     cmd.env("PGMANAGER_SOCKET", path.to_str().unwrap());
     let status = cmd.status().await.unwrap();
     cancellation_token.cancel();
     server.await.unwrap();
-    std::process::exit(status.code().unwrap_or(1));
+    let exit_code: u8 = status.code().unwrap_or(1).try_into().unwrap();
+    ExitCode::from(exit_code)
 }
 
-pub async fn wrap_each(path: &Path, command: Vec<String>, ignore_exit_code: bool, xarg: bool) {
+pub async fn wrap_each(
+    path: &Path,
+    command: Vec<String>,
+    ignore_exit_code: bool,
+    xarg: bool,
+) -> ExitCode {
     let (server, cancellation_token) = start_server(path).await;
     let (program, args) = command.split_first().expect("No command provided");
     let databases = build_databases();
-    let mut exit_code = 0;
+    let mut exit_code: u8 = 0;
 
     for (n, db_name) in databases.lock().await.iter().enumerate() {
         let mut cmd = tokio::process::Command::new(program);
@@ -165,13 +172,17 @@ pub async fn wrap_each(path: &Path, command: Vec<String>, ignore_exit_code: bool
         cmd.env("PGM_DATABASE_SHARD", n.to_string());
         let status = cmd.status().await.unwrap();
         if !ignore_exit_code && !status.success() {
-            exit_code = status.code().unwrap_or(1);
+            exit_code = status
+                .code()
+                .unwrap_or(1)
+                .try_into()
+                .expect("Unable to convert exit code to u8");
             break;
         }
     }
     cancellation_token.cancel();
     server.await.unwrap();
-    std::process::exit(exit_code);
+    ExitCode::from(exit_code)
 }
 
 pub struct DatabaseGuard {

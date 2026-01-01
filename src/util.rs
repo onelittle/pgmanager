@@ -1,28 +1,27 @@
-use std::str::FromStr;
+use std::{env::VarError, str::FromStr};
 
 use tracing::warn;
 
 fn get_prefixed_env_var(key: &str) -> Option<String> {
-    std::env::var(format!("PGM_{}", key))
-        .map_err(|e| match e {
-            std::env::VarError::NotPresent => {
-                warn!("Environment variable PMG_{} not found.", key);
-                warn!("  Falling back to {}.", key);
-            }
-            _ => {
-                warn!("{}", e);
-            }
-        })
-        .or_else(|_| std::env::var(key))
-        .map_err(|e| match e {
-            std::env::VarError::NotPresent => {
-                warn!("Environment variable {} not found", key);
-            }
-            _ => {
-                warn!("{}", e);
-            }
-        })
-        .ok()
+    let prefixed_key = format!("PGM_{}", key);
+    let prefixed = std::env::var(&prefixed_key);
+    let fallback = std::env::var(key);
+    match (prefixed, fallback) {
+        (Ok(val), _) => Some(val),
+        (Err(VarError::NotPresent), Ok(val)) => {
+            warn!("Environment variable {prefixed_key} not found. Using fallback {key}");
+            warn!("This behavior is deprecated and will panic in a future version.");
+            Some(val)
+        }
+        (Err(VarError::NotPresent), _) => {
+            warn!("Environment variable {prefixed_key} not found");
+            None
+        }
+        (Err(VarError::NotUnicode(_)), _) => {
+            warn!("Environment variable {prefixed_key} contains non-unicode data");
+            None
+        }
+    }
 }
 
 pub(crate) fn env_var<T: FromStr>(key: &str) -> Option<T> {

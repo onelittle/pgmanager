@@ -42,7 +42,7 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> std::process::ExitCode {
     let args = Cli::parse();
 
     tracing_subscriber::fmt()
@@ -66,16 +66,13 @@ async fn main() {
     match args.command {
         Commands::Serve => {
             serve(&path).await;
+            std::process::ExitCode::SUCCESS
         }
-        Commands::Wrap { command } => {
-            wrap(&path, command).await;
-        }
+        Commands::Wrap { command } => wrap(&path, command).await,
         Commands::WrapEach {
             command,
             ignore_exit_code,
             xarg,
-        } => {
-            wrap_each(&path, command, ignore_exit_code, xarg).await;
-        }
+        } => wrap_each(&path, command, ignore_exit_code, xarg).await,
     }
 }
