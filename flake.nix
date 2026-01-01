@@ -13,6 +13,15 @@
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
       in {
+        devShell = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            cargo
+            rustc
+            clippy
+            rustfmt
+          ];
+        };
+
         packages.pgmanager = pkgs.rustPlatform.buildRustPackage {
           pname = "pgmanager";
           version = "0.1.0";
