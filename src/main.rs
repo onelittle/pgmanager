@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand, command};
+use clap::{Parser, Subcommand};
 
 use pgmanager::commands;
 
