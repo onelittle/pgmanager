@@ -40,6 +40,10 @@ async fn main() {
         } else {
             tracing::Level::INFO
         })
+        .with_writer(
+            // Write to stderr
+            std::io::stderr,
+        )
         .init();
 
     let path = if args.socket.starts_with("/") {
