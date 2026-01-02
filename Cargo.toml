@@ -4,6 +4,7 @@ version = "0.3.0"
 edition = "2024"
 license = "MIT"
 description = "Provide locked access to test databases."
+repository = "https://github.com/onelittle/pgmanager"
 
 [dependencies]
 clap = { version = "4.5.53", features = ["derive"] }
