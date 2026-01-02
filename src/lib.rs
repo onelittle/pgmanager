@@ -3,6 +3,8 @@ mod core;
 mod stats;
 mod util;
 
+use std::{fmt::Display, ops::Deref};
+
 use tokio::{io::AsyncReadExt, net::UnixStream};
 
 pub const DEFAULT_SOCKET_PATH: &str = "tmp/pgmanager.sock";
@@ -10,6 +12,26 @@ pub const DEFAULT_SOCKET_PATH: &str = "tmp/pgmanager.sock";
 pub struct DatabaseGuard {
     pub name: String,
     _stream: UnixStream,
+}
+
+impl Deref for DatabaseGuard {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.name.as_str()
+    }
+}
+
+impl Display for DatabaseGuard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self)
+    }
+}
+
+impl From<&DatabaseGuard> for String {
+    fn from(value: &DatabaseGuard) -> String {
+        value.to_string()
+    }
 }
 
 pub async fn get_database() -> DatabaseGuard {
