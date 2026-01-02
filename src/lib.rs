@@ -80,7 +80,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_get_database() {
         let path = test_helpers::temp_path();
-        let (server, cancellation_token) = test_helpers::temp_server(&path).await;
+        let (server, cancellation_token) = test_helpers::temp_server(&path, None).await;
 
         let stream = test_helpers::temp_client(&path).await;
         let db_guard_a = get_database_from_stream(stream).await;
@@ -90,6 +90,22 @@ pub(crate) mod tests {
         assert!(db_guard_a.name.starts_with("test_db_"));
         assert!(db_guard_b.name.starts_with("test_db_"));
         assert_ne!(db_guard_a.name, db_guard_b.name);
+        cancellation_token.cancel();
+        server.await.expect("Server task failed");
+    }
+
+    #[tokio::test]
+    async fn test_formatting() {
+        let path = test_helpers::temp_path();
+        let config = Some(core::Config::new(1, "test_db".into()));
+        let (server, cancellation_token) = test_helpers::temp_server(&path, config).await;
+
+        let stream = test_helpers::temp_client(&path).await;
+        let db_name = get_database_from_stream(stream).await;
+        let message = format!("A database is available at {}", db_name);
+
+        assert_eq!(db_name.to_string(), "test_db0".to_string());
+        assert_eq!(message, "A database is available at test_db0");
         cancellation_token.cancel();
         server.await.expect("Server task failed");
     }
@@ -109,8 +125,11 @@ pub(crate) mod test_helpers {
             .to_path_buf()
     }
 
-    pub async fn temp_server(path: &std::path::Path) -> (JoinHandle<()>, CancellationToken) {
-        let config = core::Config::new(2, "test_db_".to_string());
+    pub async fn temp_server(
+        path: &std::path::Path,
+        config: Option<core::Config>,
+    ) -> (JoinHandle<()>, CancellationToken) {
+        let config = config.unwrap_or_else(|| core::Config::new(2, "test_db_".to_string()));
         let (server, cancellation_token) = core::start_server(path, config).await;
         (server, cancellation_token)
     }
