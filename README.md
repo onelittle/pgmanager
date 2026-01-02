@@ -20,7 +20,7 @@ cargo install pgmanager
 
 ```toml
 [dev-dependencies]
-pgmanager = "0.2.0"
+pgmanager = "0.3.0"
 ```
 
 ### nix flake
@@ -87,10 +87,8 @@ pgmanager serve
 mod tests {
     #[tokio::test]
     async fn test() {
-        let db_guard: pgmanager::DatabaseGuard = pgmanager::get_database()
-            .await
-            .expect("Failed to get test database");
-        eprintln!("A database is available at {}", db_guard.name);
+        let db_name = pgmanager::get_database().await;
+        eprintln!("A database is available at {}", db_name);
     }
 }
 ```
