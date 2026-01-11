@@ -3,6 +3,7 @@ mod core;
 mod stats;
 mod util;
 
+pub use core::DbLike;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Deref};
 use tokio::{io::AsyncReadExt, net::UnixStream};
@@ -16,7 +17,7 @@ enum Message {
     Empty(String),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct DatabaseConfig {
     dbuser: String,
     dbpass: String,
@@ -77,7 +78,7 @@ impl DatabaseConfig {
     pub(crate) fn with_db(dbname: String) -> Self {
         let dbuser = std::env::var("PGUSER")
             .or_else(|_| std::env::var("USER"))
-            .expect("Failed to get current user");
+            .unwrap_or("postgres".to_string());
         let dbpass = std::env::var("PGPASSWORD").ok().unwrap_or("".to_string());
         let dbport = std::env::var("PGPORT")
             .ok()
@@ -155,6 +156,7 @@ async fn get_database_from_stream(mut stream: UnixStream) -> DatabaseGuard {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use pgtemp::PgTempDB;
     use std::env;
 
     use super::*;
@@ -162,7 +164,8 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_get_database() {
         let path = test_helpers::temp_path();
-        let (server, cancellation_token) = test_helpers::temp_server(&path, None).await;
+        let (server, cancellation_token) =
+            test_helpers::temp_server::<DatabaseConfig>(&path, None).await;
 
         let stream = test_helpers::temp_client(&path).await;
         let db_guard_a = get_database_from_stream(stream).await;
@@ -171,7 +174,22 @@ pub(crate) mod tests {
 
         assert!(db_guard_a.config.db_name().starts_with("test_db_"));
         assert!(db_guard_b.config.db_name().starts_with("test_db_"));
-        assert_ne!(db_guard_a.config.db_name(), db_guard_b.config.db_name());
+        assert_ne!(db_guard_a.config, db_guard_b.config);
+        cancellation_token.cancel();
+        server.await.expect("Server task failed");
+    }
+
+    #[tokio::test]
+    async fn test_get_database_pgtemp() {
+        let path = test_helpers::temp_path();
+        let (server, cancellation_token) = test_helpers::temp_server::<PgTempDB>(&path, None).await;
+
+        let stream = test_helpers::temp_client(&path).await;
+        let db_guard_a = get_database_from_stream(stream).await;
+        let stream = test_helpers::temp_client(&path).await;
+        let db_guard_b = get_database_from_stream(stream).await;
+
+        assert_ne!(db_guard_a.config, db_guard_b.config);
         cancellation_token.cancel();
         server.await.expect("Server task failed");
     }
@@ -183,7 +201,8 @@ pub(crate) mod tests {
         }
         let path = test_helpers::temp_path();
         let config = Some(core::Config::new(1, "test_db".into()));
-        let (server, cancellation_token) = test_helpers::temp_server(&path, config).await;
+        let (server, cancellation_token) =
+            test_helpers::temp_server::<DatabaseConfig>(&path, config).await;
 
         let stream = test_helpers::temp_client(&path).await;
         let db_name = get_database_from_stream(stream).await;
@@ -207,7 +226,7 @@ pub(crate) mod test_helpers {
     use tokio::{net::UnixStream, task::JoinHandle};
     use tokio_util::sync::CancellationToken;
 
-    use crate::core;
+    use crate::core::{self, DbLike};
 
     pub fn temp_path() -> std::path::PathBuf {
         tempfile::NamedTempFile::new()
@@ -216,12 +235,12 @@ pub(crate) mod test_helpers {
             .to_path_buf()
     }
 
-    pub async fn temp_server(
+    pub async fn temp_server<D: DbLike>(
         path: &std::path::Path,
         config: Option<core::Config>,
     ) -> (JoinHandle<()>, CancellationToken) {
         let config = config.unwrap_or_else(|| core::Config::new(2, "test_db_".to_string()));
-        let (server, cancellation_token) = core::start_server(path, config).await;
+        let (server, cancellation_token) = core::start_server::<D>(path, config).await;
         (server, cancellation_token)
     }
 

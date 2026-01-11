@@ -2,11 +2,14 @@ use std::{path::Path, process::ExitCode};
 
 use tracing::info;
 
-use crate::{core, stats};
+use crate::{
+    core::{self, DbLike},
+    stats,
+};
 
-pub async fn serve(path: &Path) {
-    let config = core::Config::from_env();
-    let (server, cancellation_token) = core::start_server(path, config).await;
+pub async fn serve<D: DbLike>(path: &Path) {
+    let config = core::Config::from_env(D::fallback_prefix());
+    let (server, cancellation_token) = core::start_server::<D>(path, config).await;
 
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
@@ -21,9 +24,9 @@ pub async fn serve(path: &Path) {
     }
 }
 
-pub async fn wrap(path: &Path, command: Vec<String>) -> ExitCode {
-    let config = core::Config::from_env();
-    let (server, cancellation_token) = core::start_server(path, config).await;
+pub async fn wrap<D: DbLike>(path: &Path, command: Vec<String>) -> ExitCode {
+    let config = core::Config::from_env(D::fallback_prefix());
+    let (server, cancellation_token) = core::start_server::<D>(path, config).await;
 
     // Run the command as passed and send PGMANAGER_SOCKET env var
     let (program, args) = command.split_first().expect("No command provided");
@@ -43,19 +46,22 @@ pub async fn wrap_each(
     ignore_exit_code: bool,
     xarg: bool,
 ) -> ExitCode {
-    let config = core::Config::from_env();
-    let (server, cancellation_token) = core::start_server(path, config.clone()).await;
+    use crate::DatabaseConfig;
+
+    let config = core::Config::from_env(None);
+    let (server, cancellation_token) =
+        core::start_server::<DatabaseConfig>(path, config.clone()).await;
     let (program, args) = command.split_first().expect("No command provided");
-    let databases = core::build_databases(config);
+    let databases = core::build_databases::<DatabaseConfig>(config);
     let mut exit_code: u8 = 0;
 
     for (n, db_name) in databases.lock().await.iter().enumerate() {
         let mut cmd = tokio::process::Command::new(program);
         cmd.args(args);
         if xarg {
-            cmd.arg(db_name);
+            cmd.arg(db_name.db_name());
         }
-        cmd.env("PGDATABASE", db_name);
+        cmd.env("PGDATABASE", db_name.db_name());
         cmd.env("PGM_DATABASE_SHARD", n.to_string());
         let status = cmd.status().await.unwrap();
         if !ignore_exit_code && !status.success() {

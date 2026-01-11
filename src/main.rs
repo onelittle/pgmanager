@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use pgmanager::commands;
+use pgmanager::{DatabaseConfig, commands};
+use pgtemp::PgTempDB;
 
 #[derive(Parser)]
 struct Cli {
@@ -12,6 +13,9 @@ struct Cli {
     /// Enable verbose logging
     #[clap(short, long, default_value_t = false)]
     verbose: bool,
+    /// Use pgtemp for temporary databases
+    #[clap(long, default_value_t = false)]
+    pgtemp: bool,
     // Subcommand to wrap another command
     #[clap(subcommand)]
     command: Commands,
@@ -63,16 +67,30 @@ async fn main() -> std::process::ExitCode {
         std::env::current_dir().unwrap().join(args.socket)
     };
 
-    match args.command {
-        Commands::Serve => {
-            commands::serve(&path).await;
+    match (args.command, args.pgtemp) {
+        (Commands::Serve, true) => {
+            commands::serve::<pgtemp::PgTempDB>(&path).await;
             std::process::ExitCode::SUCCESS
         }
-        Commands::Wrap { command } => commands::wrap(&path, command).await,
-        Commands::WrapEach {
-            command,
-            ignore_exit_code,
-            xarg,
-        } => commands::wrap_each(&path, command, ignore_exit_code, xarg).await,
+        (Commands::Wrap { command }, true) => commands::wrap::<PgTempDB>(&path, command).await,
+        (Commands::Serve, false) => {
+            commands::serve::<DatabaseConfig>(&path).await;
+            std::process::ExitCode::SUCCESS
+        }
+        (Commands::Wrap { command }, false) => {
+            commands::wrap::<DatabaseConfig>(&path, command).await
+        }
+        (
+            Commands::WrapEach {
+                command,
+                ignore_exit_code,
+                xarg,
+            },
+            false,
+        ) => commands::wrap_each(&path, command, ignore_exit_code, xarg).await,
+        (_, true) => {
+            eprintln!("The --pgtemp flag is not supported with this command.");
+            std::process::ExitCode::from(1)
+        }
     }
 }
