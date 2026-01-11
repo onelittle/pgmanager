@@ -24,7 +24,7 @@
 
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "pgmanager";
-          version = "0.3.1";
+          version = "0.4.0";
 
           src = ./.;
 
