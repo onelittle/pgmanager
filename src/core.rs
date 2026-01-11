@@ -142,14 +142,24 @@ async fn server<D: DbLike>(
     }
 }
 
-pub(crate) fn build_databases<D: DbLike>(config: Config) -> Databases<D> {
-    let mut databases: VecDeque<D> = VecDeque::new();
-    #[allow(unused_variables)]
+pub(crate) async fn build_databases<D: DbLike>(config: Config) -> Databases<D> {
+    let databases = Arc::new(Mutex::new(VecDeque::new()));
+    let mut tasks = vec![];
+    let prefix = config.prefix;
     for n in 0..config.max_databases {
-        databases.push_back(D::from_dbname(format!("{}{}", config.prefix, n)));
+        let databases = databases.clone();
+        let prefix = prefix.clone();
+        tasks.push(tokio::spawn(async move {
+            let db = D::from_dbname(format!("{}{}", prefix, n));
+            let mut dbs = databases.lock().await;
+            dbs.push_back(db);
+        }));
+    }
+    for task in tasks {
+        task.await.unwrap();
     }
     info!("Built {} databases", config.max_databases);
-    Arc::new(Mutex::new(databases))
+    databases
 }
 
 pub(crate) async fn start_server<D: DbLike>(
@@ -158,7 +168,7 @@ pub(crate) async fn start_server<D: DbLike>(
 ) -> (tokio::task::JoinHandle<()>, CancellationToken) {
     let cancellation_token = tokio_util::sync::CancellationToken::new();
     let barrier = Arc::new(tokio::sync::Barrier::new(2));
-    let databases = build_databases::<D>(config);
+    let databases = build_databases::<D>(config).await;
 
     if path.is_dir() {
         panic!("Socket path cannot be a directory");
@@ -192,7 +202,7 @@ mod tests {
     #[tokio::test]
     async fn test_build_databases() {
         let config = Config::new(2, "test_db_".to_string());
-        let actual = build_databases::<DatabaseConfig>(config);
+        let actual = build_databases::<DatabaseConfig>(config).await;
         let actual = actual.lock().await.clone();
         let expected: VecDeque<_> = vec![
             DatabaseConfig::with_db("test_db_0".to_string()),
