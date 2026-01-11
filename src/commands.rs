@@ -52,7 +52,7 @@ pub async fn wrap_each(
     let (server, cancellation_token) =
         core::start_server::<DatabaseConfig>(path, config.clone()).await;
     let (program, args) = command.split_first().expect("No command provided");
-    let databases = core::build_databases::<DatabaseConfig>(config);
+    let databases = core::build_databases::<DatabaseConfig>(config).await;
     let mut exit_code: u8 = 0;
 
     for (n, db_name) in databases.lock().await.iter().enumerate() {
