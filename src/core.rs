@@ -9,7 +9,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-use crate::{stats, util};
+use crate::{DatabaseConfig, Message, stats, util};
 
 #[derive(Clone)]
 pub(crate) struct Config {
@@ -43,7 +43,7 @@ async fn respond(databases: Databases, mut stream: UnixStream, address: SocketAd
                 let mut dbs = databases.lock().await;
                 if let Some(name) = dbs.pop_front() {
                     stats::increment_usage();
-                    break name.clone();
+                    break name;
                 }
                 drop(dbs);
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -53,7 +53,10 @@ async fn respond(databases: Databases, mut stream: UnixStream, address: SocketAd
         let instant = std::time::Instant::now();
         // Respont to the client OK:{db_name} or EMPTY:No databases available
         debug!("Assigned database: {:?}", name);
-        if let Err(e) = stream.write_all(format!("OK:{}", name).as_bytes()).await {
+        let config: DatabaseConfig = DatabaseConfig::with_db(name.clone());
+        let message = Message::Ok(config);
+        let message_json = serde_json::to_string(&message).unwrap();
+        if let Err(e) = stream.write_all(message_json.as_bytes()).await {
             debug!("Failed to write to stream: {}", e);
         }
         stream.flush().await.unwrap();
