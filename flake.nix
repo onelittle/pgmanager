@@ -32,6 +32,10 @@
             lockFile = ./Cargo.lock;
           };
 
+          nativeBuildInputs = [
+            pkgs.postgresql
+          ];
+
           meta = {
             description = "CLI to manage PostgreSQL databases in test environments";
             homepage = "https://github.com/onelittle/pgmanager";
