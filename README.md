@@ -20,7 +20,7 @@ cargo install pgmanager
 
 ```toml
 [dev-dependencies]
-pgmanager = "0.3.1"
+pgmanager = "0.4.0"
 ```
 
 ### nix flake
