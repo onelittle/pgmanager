@@ -7,7 +7,7 @@ description = "Provide locked access to test databases."
 repository = "https://github.com/onelittle/pgmanager"
 
 [dependencies]
-clap = { version = "4.5.53", features = ["derive"] }
+clap = { version = "4.5.54", features = ["derive"] }
 tokio = { version = "1.48", features = ["macros", "rt-multi-thread", "signal", "io-util", "io-std", "net", "time", "process"] }
 tokio-util = "0.7.17"
 tracing = "0.1.44"
